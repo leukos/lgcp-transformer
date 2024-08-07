@@ -115,7 +115,7 @@ class LGCPDataSet(Dataset):
       res['points'] = self.points[i, :, :]
       res['params'] = torch.tensor(np.array([self.mu[i], self.var[i], self.scale[i]]), dtype=torch.float32)
       if self.discretize:
-        res['grid'] = self.m
+        res['grid'] = self.m[i, :, :]
       return res
 
     def __len__(self):
