@@ -12,7 +12,7 @@ class LGCPDataSet(Dataset):
     """
     This class is a dataset loader for point samples from LGCP .
     """
-    def __init__(self, path, standardize=True, discretize=False, points=False, num_points=512, num_samples=None):
+    def __init__(self, path, standardize=True, discretize=False, num_cells=10, points=False, num_points=512, num_samples=None):
         """
         Constructor for the LGCPDataSet class.
         :param path str: Path to the JSON file containing the LGCP samples.
@@ -21,6 +21,13 @@ class LGCPDataSet(Dataset):
         :param points bool: Add the raw points to the dataset.
         :param num_points int: How many points to include at most from each point sample. If #points < num_points the points will be sampled.
         """
+
+        self.standardize = standardize
+        self.discretize = discretize
+        self.points = points
+        self.num_samples = num_samples
+        self.num_cells = num_cells
+
         with open(path, 'r') as f:
           data = json.load(f)
 
@@ -35,7 +42,7 @@ class LGCPDataSet(Dataset):
           data['L'] = list(map(data['L'].__getitem__, idx))
 
         if discretize:
-          self.__discretize(data)
+          self.__discretize(data, num_cells)
 
         if points:
           self.points = torch.zeros((len(data['X']), num_points, 2))
@@ -97,6 +104,7 @@ class LGCPDataSet(Dataset):
               'scale_scaler': self.scale_scaler, 'n_scaler': self.n_scaler,
               'L_scaler': self.L_scaler, 'points_mean': self.points_mean,
               'points_std': self.points_std}
+      
 
     def __getitem__(self, i):
       res = dict()
@@ -106,13 +114,15 @@ class LGCPDataSet(Dataset):
 
       res['points'] = self.points[i, :, :]
       res['params'] = torch.tensor(np.array([self.mu[i], self.var[i], self.scale[i]]), dtype=torch.float32)
+      if self.discretize:
+        res['grid'] = self.m
       return res
 
     def __len__(self):
       return len(self.mu)
 
-    def __discretize(self, data):
-      self.m = np.zeros((len(data['X']), 100, 100))
+    def __discretize(self, data, num_cells):
+      self.m = np.zeros((len(data['X']), num_cells, num_cells))
       for i in range(len(data['X'])):
         for j in range(len(data['X'][i])):
-          self.m[i, int(data['X'][i][j] * 100) - 1, int(data['Y'][i][j] * 100) - 1]  += 1
+          self.m[i, int(data['X'][i][j] * num_cells) - 1, int(data['Y'][i][j] * num_cells) - 1]  += 1
