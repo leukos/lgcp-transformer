@@ -116,15 +116,3 @@ class LGCPDataSet(Dataset):
       for i in range(len(data['X'])):
         for j in range(len(data['X'][i])):
           self.m[i, int(data['X'][i][j] * 100) - 1, int(data['Y'][i][j] * 100) - 1]  += 1
-
-
-# Create the training and test dataset
-train_dataset = LGCPDataSet('sample_1x10000.json', points=True, num_points=1024)
-test_dataset = LGCPDataSet('sample_10000.json', standardize=train_dataset.get_standardizers(), points=True, num_points=1024)
-
-# Create data loader for training
-# my batch size here is 100
-train_loader = DataLoader(dataset=train_dataset, batch_size=256, shuffle=True, prefetch_factor=3, pin_memory=True, num_workers=cpu_count-1)
-
-# # Create data loader for testing
-test_loader = DataLoader(dataset=test_dataset, batch_size=256, shuffle=False, pin_memory=True, prefetch_factor=3, num_workers=cpu_count-1)
