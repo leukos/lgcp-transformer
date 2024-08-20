@@ -12,7 +12,7 @@ class LGCPDataSet(Dataset):
     """
     This class is a dataset loader for point samples from LGCP .
     """
-    def __init__(self, path, standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None):
+    def __init__(self, path, standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None, max_points=None):
         """
         Constructor for the LGCPDataSet class.
         :param path str: Path to the JSON file containing the LGCP samples.
@@ -20,6 +20,7 @@ class LGCPDataSet(Dataset):
         :param discretize bool: Whether to create a 2D grid approximation for the intensity field.
         :param points bool: Add the raw points to the dataset.
         :param num_points int: How many points to include at most from each point sample. If #points < num_points the points will be sampled.
+        :param max_points int: Indicates the maximum number of samples in any point pattern. Samples with more than max_ponits points will be discarded
         """
 
         self.standardize = standardize
@@ -33,6 +34,18 @@ class LGCPDataSet(Dataset):
         with open(path, 'r') as f:
           data = json.load(f)
 
+        # filter out data samples with more than num_points
+        if max_points is not None:
+          indices = data['N'] <= max_points
+          data['mu'] = data['mu'][indices]
+          data['var'] = data['var'][indices]
+          data['scale'] = data['scale'][indices]
+          data['X'] = data['X'][indices]
+          data['Y'] = data['Y'][indices]
+          data['L'] = data['L'][indices]
+          data['N'] = data['N'][indices]
+
+        # select a random subsample of the total available data of size num_samples
         if num_samples is not None:
           idx = np.random.choice(list(range(len(data['mu']))), num_samples, replace=False)
           data['mu'] = list(map(data['mu'].__getitem__, idx))
@@ -47,6 +60,7 @@ class LGCPDataSet(Dataset):
           self.__discretize(data, num_cells)
 
         if return_points:
+          max(data['N'])
           self.points = torch.zeros((len(data['X']), num_points, 2))
           for i, d in enumerate(zip(data['X'], data['Y'])):
             if len(d[0]) > num_points:
