@@ -36,14 +36,14 @@ class LGCPDataSet(Dataset):
 
         # filter out data samples with more than num_points
         if max_points is not None:
-          indices = data['N'] <= max_points
-          data['mu'] = data['mu'][indices]
-          data['var'] = data['var'][indices]
-          data['scale'] = data['scale'][indices]
-          data['X'] = data['X'][indices]
-          data['Y'] = data['Y'][indices]
-          data['L'] = data['L'][indices]
-          data['N'] = data['N'][indices]
+          idx = np.squeeze(np.argwhere(np.array(data['N']) <= max_points))
+          data['mu'] = list(map(data['mu'].__getitem__, idx))
+          data['var'] = list(map(data['var'].__getitem__, idx))
+          data['scale'] = list(map(data['scale'].__getitem__, idx))
+          data['X'] = list(map(data['X'].__getitem__, idx))
+          data['Y'] = list(map(data['Y'].__getitem__, idx))
+          data['N'] = list(map(data['N'].__getitem__, idx))
+          data['L'] = list(map(data['L'].__getitem__, idx))
 
         # select a random subsample of the total available data of size num_samples
         if num_samples is not None:
@@ -59,20 +59,16 @@ class LGCPDataSet(Dataset):
         if discretize:
           self.__discretize(data, num_cells)
 
-        if return_points:
-          max(data['N'])
-          self.points = torch.zeros((len(data['X']), num_points, 2))
-          for i, d in enumerate(zip(data['X'], data['Y'])):
-            if len(d[0]) > num_points:
-              choice = np.random.choice(len(d[0]), num_points, replace=False)
-              self.points[i, :, :] = torch.tensor(np.array(d).transpose()[choice])
-            else:
-              self.points[i, :len(d[0]), :] = torch.tensor(np.array(d).transpose())
-
         if return_raw_points:
           self.raw_points = []
           for d in zip(data['X'], data['Y']):
             self.raw_points.append(torch.tensor(np.array(d).transpose(), dtype=torch.float32))
+
+        if type(standardize) == bool and not standardize and return_points:
+          dim_points = max(data['N'])
+          self.points = torch.zeros((len(data['X']), dim_points, 2))
+          for i, d in enumerate(zip(data['X'], data['Y'])):
+              self.points[i, :len(d[0]), :] = torch.tensor(np.array(d).transpose())
 
         self.n_raw = np.array(data['N'])
         if num_points:
@@ -92,8 +88,15 @@ class LGCPDataSet(Dataset):
           self.L = self.L_scaler.fit_transform(np.array(data['L']))
 
           if self.return_points:
-            self.points_std, self.points_mean = torch.std_mean(self.points)
-            self.points = (self.points - self.points_mean) / self.points_std            
+            raw_points = []
+            for d in zip(data['X'], data['Y']):
+              raw_points.append(torch.tensor(np.array(d).transpose(), dtype=torch.float32))
+            self.points_std, self.points_mean = torch.std_mean(torch.cat(raw_points, 0), 0)
+
+            dim_points = max(data['N'])
+            self.points = torch.zeros((len(data['X']), dim_points, 2))
+            for i, d in enumerate(zip(data['X'], data['Y'])):
+              self.points[i, :len(d[0]), :] = (torch.tensor(np.array(d).transpose()) - self.points_mean) / self.points_std
 
           if self.return_raw_points:
             self.raw_points_std, self.raw_points_mean = torch.std_mean(torch.cat(self.raw_points, 0), 0)
@@ -117,7 +120,10 @@ class LGCPDataSet(Dataset):
             self.L = standardize['L_scaler'].transform(np.array(data['L']))
 
           if return_points:
-            self.points = (self.points - standardize['points_mean']) / standardize['points_std']
+            dim_points = max(data['N'])
+            self.points = torch.zeros((len(data['X']), dim_points, 2))
+            for i, d in enumerate(zip(data['X'], data['Y'])):
+              self.points[i, :len(d[0]), :] = (torch.tensor(np.array(d).transpose()) - standardize['points_mean']) / standardize['points_std']
 
           if self.return_raw_points:
             for i, raw_p in enumerate(self.raw_points):
