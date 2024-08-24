@@ -156,7 +156,7 @@ class LGCPDataSet(Dataset):
 
       if self.discretize:
         scalers['m_mean'] = self.m_mean
-        scalers['mstd'] = self.m_std
+        scalers['m_std'] = self.m_std
 
       return scalers
       
