@@ -154,6 +154,10 @@ class LGCPDataSet(Dataset):
         scalers['raw_points_mean'] = self.raw_points_mean
         scalers['raw_points_std'] = self.raw_points_std
 
+      if self.discretize:
+        scalers['m_mean'] = self.m_mean
+        scalers['mstd'] = self.m_std
+
       return scalers
       
 
