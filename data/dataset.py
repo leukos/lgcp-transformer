@@ -102,11 +102,9 @@ class LGCPDataSet(Dataset):
             self.raw_points_std, self.raw_points_mean = torch.std_mean(torch.cat(self.raw_points, 0), 0)
             for i, raw_p in enumerate(self.raw_points):
               self.raw_points[i] = (raw_p - self.raw_points_mean)/self.raw_points_std
-          
 
           if discretize:
-            self.m_mean = np.mean(self.m)
-            self.m_std = np.std(self.m)
+            self.m_std, self.m_mean = torch.std_mean(self.m)
             self.m = (self.m - self.m_mean) / self.m_std
 
         elif type(standardize) == dict:
@@ -182,7 +180,7 @@ class LGCPDataSet(Dataset):
       return len(self.mu)
 
     def __discretize(self, data, num_cells):
-      self.m = np.zeros((len(data['X']), num_cells, num_cells))
+      self.m = torch.zeros((len(data['X']), num_cells, num_cells), dtype=torch.FloatTensor)
       for i in range(len(data['X'])):
         for j in range(len(data['X'][i])):
           self.m[i, int(data['X'][i][j] * num_cells) - 1, int(data['Y'][i][j] * num_cells) - 1]  += 1
