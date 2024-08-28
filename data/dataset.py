@@ -107,8 +107,9 @@ class LGCPDataSet(Dataset):
             self.m = (self.m - self.m_mean) / self.m_std
 
         elif type(standardize) == dict:
+          self.params = {}
           for param in parameters:
-            self.params[param] = self.param_scalers[param].transform(np.array(data[param])[:, np.newaxis])
+            self.params[param] = standardize['param_scalers'][param].transform(np.array(data[param])[:, np.newaxis])
 
           self.n = standardize['n_scaler'].transform(np.array(data['N'])[:, np.newaxis])
 
@@ -164,7 +165,6 @@ class LGCPDataSet(Dataset):
       res['n_raw'] = self.n_raw[i]
       res['params'] = torch.tensor(np.array([self.params[param] for param in self.parameters]), dtype=torch.float32)
 
-
       if self.return_L:
         res['L'] = torch.tensor(self.L[i], dtype=torch.float32)
       if self.return_points:
@@ -176,11 +176,12 @@ class LGCPDataSet(Dataset):
       return res
 
     def __len__(self):
-      return len(self.mu)
+      return len(self.n)
 
     def __discretize(self, data, num_cells):
       self.m = torch.zeros(len(data['X']), num_cells, num_cells, dtype=torch.float32)
       for i in range(len(data['X'])):
         xy = torch.stack([torch.tensor(data['X'][i]), torch.tensor(data['Y'][i])], dim=1)
-        self.m[i, :, :] = torch.histogramdd(xy, bins=(num_cells, num_cells), range=(0.0, 1.0, 0.0, 1.0), dtype=torch.float32)
+        hist, _ = torch.histogramdd(xy, bins=[num_cells, num_cells], range=[0, 1, 0, 1])
+        self.m[i, :, :] = hist
 
