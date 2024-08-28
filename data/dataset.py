@@ -54,8 +54,17 @@ class LGCPDataSet(Dataset):
         self.parameters = parameters
         self.feature_maps = feature_maps
 
-        with open(path, 'r') as f:
-          data = json.load(f)
+        if type(path) == str:
+          with open(path, 'r') as f:
+            data = json.load(f)
+        elif type(path) == list:
+          with open(path[0], 'r') as f:
+            data = json.load(f)
+          for fn in path[1:]:
+            with open(fn, 'r') as f:
+              dt = json.load(f)
+              for key, val in dt.items():
+                data[key].extend(val)
 
 
         if feature_maps:
