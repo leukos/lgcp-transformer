@@ -1,18 +1,40 @@
 import torch
 import json
 import numpy as np
+import pandas as pd
 
 from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader, BatchSampler, SequentialSampler
 from sklearn.preprocessing import StandardScaler
 
+from itertools import product
+import quads
+from torchvision.transforms import Resize
+
+
+def feature_map(name, dim):
+    values = torch.tensor(pd.read_csv('Al.csv').drop('Unnamed: 0', axis=1).values)
+    resolution_x = 1/values.shape[1]
+    resolution_y = 1/values.shape[0]
+
+    cells_x = int(1. / resolution_x)
+    cells_y = int(1. / resolution_y)
+
+    # Creating bin edges for a 2D histogram
+    quadrat_x = np.linspace(0, 1, cells_x + 1)
+    quadrat_y = np.linspace(0, 1, cells_y + 1)
+
+    centroids = np.asarray(list(product(quadrat_x[:-1] + resolution_x/2, quadrat_y[:-1] + resolution_y/2)))
+    val = Resize((dim, dim))(values[None, None, :, :])
+    return val[0, 0, :, :]
+
 
 class LGCPDataSet(Dataset):
     """
     This class is a dataset loader for point samples from LGCP .
     """
-    def __init__(self, path, parameters=['mu', 'var', 'scale'], standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None, max_points=None):
+    def __init__(self, path, parameters=['mu', 'var', 'scale'], feature_maps=None, standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None, max_points=None):
         """
         Constructor for the LGCPDataSet class.
         :param path str: Path to the JSON file containing the LGCP samples.
@@ -30,9 +52,14 @@ class LGCPDataSet(Dataset):
         self.return_raw_points = return_raw_points
         self.return_L = return_L
         self.parameters = parameters
+        self.feature_maps = feature_maps
 
         with open(path, 'r') as f:
           data = json.load(f)
+
+
+        if feature_maps:
+          self.maps = torch.stack([feature_map(f, num_cells) for f in feature_maps])
 
         # filter out data samples with more than num_points
         if max_points is not None:
@@ -138,6 +165,8 @@ class LGCPDataSet(Dataset):
           if return_L:
             self.L = data['L']
 
+
+
     def get_standardizers(self):
 
       scalers = {'param_scalers': self.param_scalers, 'n_scaler': self.n_scaler}
@@ -172,7 +201,10 @@ class LGCPDataSet(Dataset):
       if self.return_raw_points:
         res['raw_points'] = self.raw_points[i]
       if self.discretize:
-        res['grid'] = self.m[i, :, :]
+        if self.feature_maps:
+          res['grid'] = torch.cat([self.m[i, :, :][None, :, :], self.maps], 0)
+        else:
+          res['grid'] = self.m[i, :, :]
       return res
 
     def __len__(self):
