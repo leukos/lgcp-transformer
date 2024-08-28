@@ -22,7 +22,6 @@ class LGCPDataSet(Dataset):
         :param num_points int: How many points to include at most from each point sample. If #points < num_points the points will be sampled.
         :param max_points int: Indicates the maximum number of samples in any point pattern. Samples with more than max_ponits points will be discarded
         """
-
         self.standardize = standardize
         self.discretize = discretize
         self.return_points = return_points
@@ -183,5 +182,5 @@ class LGCPDataSet(Dataset):
       self.m = torch.zeros(len(data['X']), num_cells, num_cells, dtype=torch.float32)
       for i in range(len(data['X'])):
         xy = torch.stack([torch.tensor(data['X'][i]), torch.tensor(data['Y'][i])], dim=1)
-        torch.histogramdd(xy, bins=(num_cells, num_cells), range=(0.0, 1.0, 0.0, 1.0))
+        self.m[i, :, :] = torch.histogramdd(xy, bins=(num_cells, num_cells), range=(0.0, 1.0, 0.0, 1.0), dtype=torch.float32)
 
