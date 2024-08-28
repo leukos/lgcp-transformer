@@ -163,7 +163,7 @@ class LGCPDataSet(Dataset):
       res = dict()
       res['n'] = torch.tensor(self.n[i], dtype=torch.float32)
       res['n_raw'] = self.n_raw[i]
-      res['params'] = torch.tensor(np.array([self.params[param] for param in self.parameters]), dtype=torch.float32)
+      res['params'] = torch.tensor(np.array([self.params[param][i] for param in self.parameters]), dtype=torch.float32)
 
       if self.return_L:
         res['L'] = torch.tensor(self.L[i], dtype=torch.float32)
