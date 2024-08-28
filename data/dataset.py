@@ -12,7 +12,7 @@ class LGCPDataSet(Dataset):
     """
     This class is a dataset loader for point samples from LGCP .
     """
-    def __init__(self, path, standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None, max_points=None):
+    def __init__(self, path, parameters=['mu', 'var', 'scale'], standardize=True, discretize=False, num_cells=10, return_points=False, return_raw_points=False, return_L=False, num_points=None, num_samples=None, max_points=None):
         """
         Constructor for the LGCPDataSet class.
         :param path str: Path to the JSON file containing the LGCP samples.
@@ -30,6 +30,7 @@ class LGCPDataSet(Dataset):
         self.num_cells = num_cells
         self.return_raw_points = return_raw_points
         self.return_L = return_L
+        self.parameters = parameters
 
         with open(path, 'r') as f:
           data = json.load(f)
@@ -37,9 +38,8 @@ class LGCPDataSet(Dataset):
         # filter out data samples with more than num_points
         if max_points is not None:
           idx = np.squeeze(np.argwhere(np.array(data['N']) <= max_points))
-          data['mu'] = list(map(data['mu'].__getitem__, idx))
-          data['var'] = list(map(data['var'].__getitem__, idx))
-          data['scale'] = list(map(data['scale'].__getitem__, idx))
+          for param in parameters:
+            data[param] = list(map(data[param].__getitem__, idx))
           data['X'] = list(map(data['X'].__getitem__, idx))
           data['Y'] = list(map(data['Y'].__getitem__, idx))
           data['N'] = list(map(data['N'].__getitem__, idx))
@@ -47,10 +47,9 @@ class LGCPDataSet(Dataset):
 
         # select a random subsample of the total available data of size num_samples
         if num_samples is not None:
-          idx = np.random.choice(list(range(len(data['mu']))), num_samples, replace=False)
-          data['mu'] = list(map(data['mu'].__getitem__, idx))
-          data['var'] = list(map(data['var'].__getitem__, idx))
-          data['scale'] = list(map(data['scale'].__getitem__, idx))
+          idx = np.random.choice(list(range(len(data['X']))), num_samples, replace=False)
+          for param in parameters:
+            data[param] = list(map(data[param].__getitem__, idx))
           data['X'] = list(map(data['X'].__getitem__, idx))
           data['Y'] = list(map(data['Y'].__getitem__, idx))
           data['N'] = list(map(data['N'].__getitem__, idx))
@@ -75,17 +74,18 @@ class LGCPDataSet(Dataset):
           self.n_raw[self.n_raw >= num_points] = num_points
 
         if type(standardize) == bool and standardize:
-          self.mu_scaler = StandardScaler()
-          self.mu = self.mu_scaler.fit_transform(np.array(data['mu'])[:, np.newaxis])
-          self.var_scaler = StandardScaler()
-          self.var = self.var_scaler.fit_transform(np.array(data['var'])[:, np.newaxis])
-          self.scale_scaler = StandardScaler()
-          self.scale = self.scale_scaler.fit_transform(np.array(data['scale'])[:, np.newaxis])
+          self.param_scalers = {}
+          self.params = {}
+          for param in parameters:
+            self.param_scalers[param] = StandardScaler()
+            self.params[param] = self.param_scalers[param].fit_transform(np.array(data[param])[:, np.newaxis])
 
           self.n_scaler = StandardScaler()
           self.n = self.n_scaler.fit_transform(np.array(data['N'])[:, np.newaxis])
-          self.L_scaler = StandardScaler()
-          self.L = self.L_scaler.fit_transform(np.array(data['L']))
+
+          if return_L:
+            self.L_scaler = StandardScaler()
+            self.L = self.L_scaler.fit_transform(np.array(data['L']))
 
           if self.return_points:
             raw_points = []
@@ -108,9 +108,8 @@ class LGCPDataSet(Dataset):
             self.m = (self.m - self.m_mean) / self.m_std
 
         elif type(standardize) == dict:
-          self.mu = standardize['mu_scaler'].transform(np.array(data['mu'])[:, np.newaxis])
-          self.var = standardize['var_scaler'].transform(np.array(data['var'])[:, np.newaxis])
-          self.scale = standardize['scale_scaler'].transform(np.array(data['scale'])[:, np.newaxis])
+          for param in parameters:
+            self.params[param] = self.param_scalers[param].transform(np.array(data[param])[:, np.newaxis])
 
           self.n = standardize['n_scaler'].transform(np.array(data['N'])[:, np.newaxis])
 
@@ -131,16 +130,17 @@ class LGCPDataSet(Dataset):
             self.m = (self.m - standardize['m_mean']) / standardize['m_std']
 
         else:
-          self.mu = data['mu']
-          self.var = data['var']
-          self.scale = data['scale']
+          self.params = {}
+          for param in parameters:
+            self.params[param] = data[param]
 
           self.n = data['N']
-          self.L = data['L']
+          if return_L:
+            self.L = data['L']
 
     def get_standardizers(self):
-      scalers = {'mu_scaler': self.mu_scaler, 'var_scaler': self.var_scaler,
-              'scale_scaler': self.scale_scaler, 'n_scaler': self.n_scaler}
+
+      scalers = {'param_scalers': self.param_scalers, 'n_scaler': self.n_scaler}
       if self.return_L:
         scalers['L_scaler'] = self.L_scaler
 
@@ -163,7 +163,7 @@ class LGCPDataSet(Dataset):
       res = dict()
       res['n'] = torch.tensor(self.n[i], dtype=torch.float32)
       res['n_raw'] = self.n_raw[i]
-      res['params'] = torch.tensor(np.array([self.mu[i], self.var[i], self.scale[i]]), dtype=torch.float32)
+      res['params'] = torch.tensor(np.array([self.params[param] for param in self.parameters]), dtype=torch.float32)
 
 
       if self.return_L:
@@ -182,5 +182,6 @@ class LGCPDataSet(Dataset):
     def __discretize(self, data, num_cells):
       self.m = torch.zeros(len(data['X']), num_cells, num_cells, dtype=torch.float32)
       for i in range(len(data['X'])):
-        for j in range(len(data['X'][i])):
-          self.m[i, int(data['X'][i][j] * num_cells) - 1, int(data['Y'][i][j] * num_cells) - 1]  += 1
+        xy = torch.stack([torch.tensor(data['X'][i]), torch.tensor(data['Y'][i])], dim=1)
+        torch.histogramdd(xy, bins=(num_cells, num_cells), range=(0.0, 1.0, 0.0, 1.0))
+
